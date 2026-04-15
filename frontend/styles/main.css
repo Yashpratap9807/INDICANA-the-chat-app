@@ -1172,8 +1172,50 @@ html, body {
   transform: translateY(-1px);
 }
 
+.gif-tool-btn {
+  width: auto;
+  min-width: 42px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .file-input {
   display: none;
+}
+
+.emoji-drawer {
+  display: none;
+  padding: 10px 16px 14px;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
+}
+
+.emoji-drawer.open {
+  display: block;
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(42px, 1fr));
+  gap: 8px;
+}
+
+.emoji-btn-tile {
+  height: 42px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-1);
+  font-size: 20px;
+  cursor: pointer;
+  transition: background var(--ease), transform var(--ease);
+}
+
+.emoji-btn-tile:hover {
+  background: var(--bg-hover);
+  transform: translateY(-1px);
 }
 
 .msg-media {
@@ -1188,6 +1230,11 @@ html, body {
   object-fit: cover;
   border-radius: 16px;
   display: block;
+}
+
+.msg-gif {
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .msg-caption {
@@ -1208,6 +1255,53 @@ html, body {
 
 .camera-modal.open {
   display: flex;
+}
+
+.gif-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.76);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 39;
+}
+
+.gif-modal.open {
+  display: flex;
+}
+
+.gif-card {
+  width: min(100%, 460px);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 18px;
+  position: relative;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.gif-header {
+  margin-bottom: 16px;
+}
+
+.gif-header h3 {
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+
+.gif-header p {
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+.gif-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+  flex-wrap: wrap;
 }
 
 .camera-card {

@@ -4,6 +4,11 @@
 
 const ChatUI = (() => {
   let peer = null;
+  const EMOJIS = [
+    '😀', '😂', '😍', '🥰', '😎', '😭', '😴', '🤔', '🔥', '✨',
+    '❤️', '💙', '💯', '🎉', '🙏', '👍', '👀', '🤝', '👏', '🙌',
+    '😘', '😅', '🥳', '😇', '😡', '🤍', '🌙', '☀️', '🌸', '🎵',
+  ];
 
   const callState = {
     iceServers: null,
@@ -87,10 +92,13 @@ const ChatUI = (() => {
       </div>
 
       <form class="composer" id="composer" onsubmit="ChatUI.sendMessage(event)">
-        <input id="photo-input" class="file-input" type="file" accept="image/*" onchange="ChatUI.handleAttachment(event)" />
+        <input id="photo-input" class="file-input" type="file" accept="image/png,image/jpeg,image/webp,image/jpg" onchange="ChatUI.handleAttachment(event)" />
+        <input id="gif-file-input" class="file-input" type="file" accept="image/gif" onchange="ChatUI.handleGifFile(event)" />
         <div class="composer-input-wrap">
           <div class="composer-tools">
+            <button type="button" class="tool-btn" title="Emoji" onclick="ChatUI.toggleEmojiPicker()">☺</button>
             <button type="button" class="tool-btn" title="Share photo" onclick="ChatUI.openAttachmentPicker()">+</button>
+            <button type="button" class="tool-btn gif-tool-btn" title="Share GIF" onclick="ChatUI.openGifModal()">GIF</button>
             <button type="button" class="tool-btn" title="Use camera" onclick="ChatUI.openCamera()">O</button>
           </div>
           <textarea
@@ -110,6 +118,28 @@ const ChatUI = (() => {
           </svg>
         </button>
       </form>
+
+      <div class="emoji-drawer" id="emoji-drawer">
+        ${emojiPickerMarkup()}
+      </div>
+
+      <div class="gif-modal" id="gif-modal">
+        <div class="gif-card">
+          <button class="camera-close" type="button" onclick="ChatUI.closeGifModal()">x</button>
+          <div class="gif-header">
+            <h3>Share a GIF</h3>
+            <p>Paste a direct GIF URL or upload a local GIF file.</p>
+          </div>
+          <label class="profile-field">
+            <span>GIF URL</span>
+            <input id="gif-url-input" class="profile-input" type="url" placeholder="https://media.tenor.com/...gif" />
+          </label>
+          <div class="gif-actions">
+            <button class="btn-secondary" type="button" onclick="ChatUI.openGifFilePicker()">Upload GIF</button>
+            <button class="btn-primary" type="button" onclick="ChatUI.sendGifFromUrl()">Send GIF</button>
+          </div>
+        </div>
+      </div>
 
       <div class="camera-modal" id="camera-modal">
         <div class="camera-card">
@@ -189,6 +219,16 @@ const ChatUI = (() => {
         ${blockAction}
         <button class="btn-secondary" type="button" onclick="ChatUI.reportUser()">Report</button>
         <button class="btn-secondary" type="button" onclick="document.getElementById('msg-input').focus()" ${activePeer.hasBlocked ? 'disabled' : ''}>Message</button>
+      </div>
+    `;
+  }
+
+  function emojiPickerMarkup() {
+    return `
+      <div class="emoji-grid">
+        ${EMOJIS.map((emoji) => `
+          <button type="button" class="emoji-btn-tile" onclick="ChatUI.insertEmoji('${emoji}')">${emoji}</button>
+        `).join('')}
       </div>
     `;
   }
@@ -398,6 +438,27 @@ const ChatUI = (() => {
     element.style.height = `${Math.min(element.scrollHeight, 140)}px`;
   }
 
+  function toggleEmojiPicker() {
+    const drawer = document.getElementById('emoji-drawer');
+    if (!drawer) return;
+
+    drawer.classList.toggle('open');
+    closeGifModal();
+  }
+
+  function insertEmoji(emoji) {
+    const input = document.getElementById('msg-input');
+    if (!input) return;
+
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? input.value.length;
+    input.value = `${input.value.slice(0, start)}${emoji}${input.value.slice(end)}`;
+    input.focus();
+    const caret = start + emoji.length;
+    input.setSelectionRange(caret, caret);
+    autoResize(input);
+  }
+
   function openAttachmentPicker() {
     const input = document.getElementById('photo-input');
     if (input) input.click();
@@ -415,6 +476,60 @@ const ChatUI = (() => {
       await sendPayload({ kind: 'image', imageData, caption }, 'image');
     } catch (err) {
       alert(`Photo share failed: ${err.message}`);
+    }
+  }
+
+  function openGifModal() {
+    const modal = document.getElementById('gif-modal');
+    if (modal) modal.classList.add('open');
+
+    const drawer = document.getElementById('emoji-drawer');
+    if (drawer) drawer.classList.remove('open');
+  }
+
+  function closeGifModal() {
+    const modal = document.getElementById('gif-modal');
+    if (modal) modal.classList.remove('open');
+  }
+
+  function openGifFilePicker() {
+    const input = document.getElementById('gif-file-input');
+    if (input) input.click();
+  }
+
+  async function sendGifFromUrl() {
+    const input = document.getElementById('gif-url-input');
+    const gifUrl = input ? input.value.trim() : '';
+    if (!gifUrl) {
+      alert('Paste a GIF URL first.');
+      return;
+    }
+
+    if (!isLikelyGifUrl(gifUrl)) {
+      alert('Use a direct GIF URL that starts with http or https.');
+      return;
+    }
+
+    const caption = getComposerText();
+    clearComposer();
+    if (input) input.value = '';
+    closeGifModal();
+    await sendPayload({ kind: 'gif', gifUrl, caption }, 'image');
+  }
+
+  async function handleGifFile(event) {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = '';
+    if (!file || !peer) return;
+
+    try {
+      const gifData = await fileToGifDataUrl(file);
+      const caption = getComposerText();
+      clearComposer();
+      closeGifModal();
+      await sendPayload({ kind: 'gif', gifData, caption }, 'image');
+    } catch (err) {
+      alert(`GIF share failed: ${err.message}`);
     }
   }
 
@@ -822,6 +937,14 @@ const ChatUI = (() => {
       if (parsed && parsed.kind === 'image' && parsed.imageData) {
         return { kind: 'image', imageData: parsed.imageData, caption: parsed.caption || '' };
       }
+      if (parsed && parsed.kind === 'gif' && (parsed.gifData || parsed.gifUrl)) {
+        return {
+          kind: 'gif',
+          gifData: parsed.gifData || '',
+          gifUrl: parsed.gifUrl || '',
+          caption: parsed.caption || '',
+        };
+      }
       if (parsed && parsed.kind === 'text') {
         return { kind: 'text', text: parsed.text || '' };
       }
@@ -846,12 +969,25 @@ const ChatUI = (() => {
       `;
     }
 
+    if (payload.kind === 'gif') {
+      const source = payload.gifData || payload.gifUrl;
+      return `
+        <div class="msg-media">
+          <img class="msg-image msg-gif" src="${escapeAttribute(source)}" alt="Shared GIF" />
+          ${payload.caption ? `<div class="msg-caption">${escapeHtml(payload.caption).replace(/\n/g, '<br>')}</div>` : ''}
+        </div>
+      `;
+    }
+
     return escapeHtml(payload.text).replace(/\n/g, '<br>');
   }
 
   function previewText(payload) {
     if (payload.kind === 'image') {
       return payload.caption ? `Photo: ${payload.caption}` : 'Photo';
+    }
+    if (payload.kind === 'gif') {
+      return payload.caption ? `GIF: ${payload.caption}` : 'GIF';
     }
     return payload.text;
   }
@@ -878,6 +1014,18 @@ const ChatUI = (() => {
   async function fileToResizedDataUrl(file) {
     const raw = await readFileAsDataUrl(file);
     return resizeDataUrl(raw, 1440, 0.84);
+  }
+
+  async function fileToGifDataUrl(file) {
+    if (file.type !== 'image/gif') {
+      throw new Error('Please choose a GIF file.');
+    }
+
+    const raw = await readFileAsDataUrl(file);
+    if (raw.length > 8_000_000) {
+      throw new Error('GIF is too large. Try one under 8 MB.');
+    }
+    return raw;
   }
 
   async function resizeDataUrl(dataUrl, maxEdge, quality) {
@@ -915,6 +1063,10 @@ const ChatUI = (() => {
       image.onerror = () => reject(new Error('The image could not be loaded.'));
       image.src = src;
     });
+  }
+
+  function isLikelyGifUrl(url) {
+    return /^https?:\/\//i.test(url);
   }
 
   function getComposerText() {
@@ -977,8 +1129,15 @@ const ChatUI = (() => {
     sendMessage,
     handleKey,
     autoResize,
+    toggleEmojiPicker,
+    insertEmoji,
     openAttachmentPicker,
     handleAttachment,
+    openGifModal,
+    closeGifModal,
+    openGifFilePicker,
+    sendGifFromUrl,
+    handleGifFile,
     openCamera,
     closeCamera,
     captureCamera,
