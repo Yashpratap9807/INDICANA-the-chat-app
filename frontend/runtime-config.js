@@ -1,0 +1,1 @@
+window.INDICANA_CONFIG = window.INDICANA_CONFIG || {};

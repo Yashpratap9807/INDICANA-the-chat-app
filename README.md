@@ -40,6 +40,44 @@ Open [http://localhost:3000](http://localhost:3000).
 
 The frontend now reads runtime config from `window.INDICANA_CONFIG` in [config.js](D:/projects/new/frontend/src/config.js), so it is no longer hardcoded to `localhost` only.
 
+## Android APK
+
+The project is now prepared for Android packaging with Capacitor from [frontend/package.json](D:/projects/new/frontend/package.json) and [frontend/capacitor.config.json](D:/projects/new/frontend/capacitor.config.json).
+
+### Before building the APK
+
+1. Deploy the backend to a public HTTPS domain
+2. Edit [frontend/runtime-config.js](D:/projects/new/frontend/runtime-config.js) and set:
+
+```js
+window.INDICANA_CONFIG = window.INDICANA_CONFIG || {};
+
+Object.assign(window.INDICANA_CONFIG, {
+  apiBase: 'https://your-backend-domain.com',
+  wsBase: 'wss://your-backend-domain.com',
+});
+```
+
+3. In [backend/.env](D:/projects/new/backend/.env), allow both your web frontend and Capacitor Android origin in `CORS_ORIGIN`
+4. Keep WebSocket and HTTPS enabled on the backend because chat and calls depend on them
+
+### APK commands
+
+```powershell
+cd D:\projects\new\frontend
+npm install
+npm run android:sync
+npm run android:open
+```
+
+Then in Android Studio:
+
+1. Wait for Gradle sync
+2. Open `Build > Build Bundle(s) / APK(s) > Build APK(s)`
+3. Use the generated APK from the Android output path
+
+The Android scaffold is created in [frontend/android](D:/projects/new/frontend/android), and the packaged web assets are copied from [frontend/dist](D:/projects/new/frontend/dist).
+
 ## Production notes
 
 - Set a real `JWT_SECRET`
@@ -47,3 +85,4 @@ The frontend now reads runtime config from `window.INDICANA_CONFIG` in [config.j
 - Add a real SMS provider instead of console OTP logging
 - Add TURN credentials for better call reliability
 - Move media to object storage for production scale
+- Host the backend somewhere that supports WebSockets well, because calls and live chat depend on it
