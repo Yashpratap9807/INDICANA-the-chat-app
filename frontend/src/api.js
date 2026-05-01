@@ -5,12 +5,55 @@
 const API = (() => {
   const BASE = window.INDICANA_CONFIG?.apiBase || 'http://localhost:3001';
   const WS_BASE = window.INDICANA_CONFIG?.wsBase || 'ws://localhost:3001';
+  const REQUEST_TIMEOUT_MS = 12000;
 
   let socket = null;
   let onEvent = null;
   let reconnectTimer = null;
   let manualDisconnect = false;
   let rtcConfigCache = null;
+
+  function isLikelyNativeShell() {
+    return window.location.protocol === 'https:' && window.location.hostname === 'localhost';
+  }
+
+  function isLoopbackBase(baseUrl) {
+    return /:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(baseUrl);
+  }
+
+  function buildNetworkError(path) {
+    if (isLikelyNativeShell() && isLoopbackBase(BASE)) {
+      return new Error(
+        `This APK is still pointing to ${BASE}${path}. On a phone, localhost means the phone itself. Set frontend/runtime-config.js to your real backend URL, rebuild the APK, and try again.`
+      );
+    }
+
+    return new Error(
+      `Could not reach ${BASE}${path}. Make sure your backend is running and reachable from this device.`
+    );
+  }
+
+  async function fetchJson(url, options = {}) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      const data = await response.json().catch(() => ({}));
+      return { response, data };
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        throw new Error(`Request timed out while contacting ${url}.`);
+      }
+
+      throw buildNetworkError(url.replace(BASE, ''));
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
 
   function authHeaders() {
     const session = Store.get();
@@ -24,8 +67,7 @@ const API = (() => {
     const options = { method, headers: authHeaders() };
     if (body) options.body = JSON.stringify(body);
 
-    const response = await fetch(BASE + path, options);
-    const data = await response.json().catch(() => ({}));
+    const { response, data } = await fetchJson(BASE + path, options);
     if (!response.ok) {
       throw new Error(data.error || `HTTP ${response.status}`);
     }
@@ -33,12 +75,11 @@ const API = (() => {
   }
 
   async function publicRequest(method, path, body) {
-    const response = await fetch(BASE + path, {
+    const { response, data } = await fetchJson(BASE + path, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: body ? JSON.stringify(body) : undefined,
     });
-    const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       throw new Error(data.error || `HTTP ${response.status}`);
     }
@@ -110,15 +151,26 @@ const API = (() => {
       headers.Authorization = `Bearer ${session.token}`;
     }
 
-    return fetch(`${BASE}/phone/send-otp`, {
+    return fetchJson(`${BASE}/phone/send-otp`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ phone }),
-    }).then(async (response) => {
-      const data = await response.json().catch(() => ({}));
+    }).then(({ response, data }) => {
       if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
       return data;
     });
+  }
+
+  function health() {
+    return publicRequest('GET', '/health');
+  }
+
+  function getRuntimeSummary() {
+    return {
+      apiBase: BASE,
+      wsBase: WS_BASE,
+      needsPublicBackend: isLikelyNativeShell() && isLoopbackBase(BASE),
+    };
   }
 
   function verifyPhoneOtp(phone, otp) {
@@ -307,6 +359,8 @@ const API = (() => {
     updateMyProfile,
     sendPhoneOtp,
     verifyPhoneOtp,
+    health,
+    getRuntimeSummary,
     listSessions,
     revokeSession,
     revokeCurrentSession,

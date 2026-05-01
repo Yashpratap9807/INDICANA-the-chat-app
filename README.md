@@ -61,6 +61,11 @@ Object.assign(window.INDICANA_CONFIG, {
 3. In [backend/.env](D:/projects/new/backend/.env), allow both your web frontend and Capacitor Android origin in `CORS_ORIGIN`
 4. Keep WebSocket and HTTPS enabled on the backend because chat and calls depend on them
 
+Important:
+- A shared APK will not work on other phones if it still points to `localhost`
+- For quick same-Wi-Fi testing, you can temporarily use `http://YOUR_LAPTOP_IP:3001` and `ws://YOUR_LAPTOP_IP:3001`
+- For a real shareable APK, use a public `https://...` and `wss://...` backend before building
+
 ### APK commands
 
 ```powershell

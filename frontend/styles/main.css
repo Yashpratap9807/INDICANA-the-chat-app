@@ -146,6 +146,28 @@ html, body {
 /* Form */
 .auth-form { display: flex; flex-direction: column; gap: 12px; }
 
+.auth-runtime-warning {
+  margin-bottom: 18px;
+  padding: 13px 14px;
+  border-radius: var(--r-md);
+  background: rgba(240, 148, 51, 0.12);
+  border: 1px solid rgba(240, 148, 51, 0.24);
+  color: var(--text-2);
+  line-height: 1.55;
+  font-size: 12px;
+}
+
+.auth-runtime-warning strong {
+  display: block;
+  color: #ffd195;
+  margin-bottom: 5px;
+}
+
+.auth-runtime-warning code {
+  color: var(--text-1);
+  word-break: break-all;
+}
+
 .field-group { display: flex; flex-direction: column; gap: 5px; }
 
 .field-group label {

@@ -7,6 +7,8 @@ const AuthUI = (() => {
   let pendingPasswordReset = null;
 
   function render() {
+    const runtime = API.getRuntimeSummary();
+
     return `
       <div class="auth-container">
         <div class="auth-card">
@@ -20,6 +22,8 @@ const AuthUI = (() => {
             <button class="tab-btn active" id="tab-login" onclick="AuthUI.switchTab('login')">Sign In</button>
             <button class="tab-btn" id="tab-register" onclick="AuthUI.switchTab('register')">Create Account</button>
           </div>
+
+          ${connectionNoticeMarkup(runtime)}
 
           <form id="login-form" class="auth-form" onsubmit="AuthUI.handleLogin(event)">
             <div id="login-password-step">
@@ -129,6 +133,17 @@ const AuthUI = (() => {
     `;
   }
 
+  function connectionNoticeMarkup(runtime) {
+    if (!runtime.needsPublicBackend) return '';
+
+    return `
+      <div class="auth-runtime-warning">
+        <strong>Backend setup needed</strong>
+        <p>This APK is still using <code>${escapeHtml(runtime.apiBase)}</code>. On a phone, that points to the phone itself, so sign up and login will fail until the app is rebuilt with a real backend URL.</p>
+      </div>
+    `;
+  }
+
   function switchTab(tab) {
     const isLogin = tab === 'login';
     document.getElementById('login-form').classList.toggle('hidden', !isLogin);
@@ -181,6 +196,15 @@ const AuthUI = (() => {
 
   function hideError(id) {
     document.getElementById(id).classList.add('hidden');
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   function enterOtpStep(phoneHint) {
