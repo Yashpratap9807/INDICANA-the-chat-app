@@ -3,7 +3,7 @@ services:
     name: indicana-backend
     runtime: node
     rootDir: backend
-    plan: starter
+    plan: free
     region: oregon
     buildCommand: npm install
     startCommand: npm start
