@@ -476,6 +476,32 @@ html, body {
   flex-shrink: 0;
 }
 
+.user-side-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.user-unread {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #ff7a18, #ff3d77);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.user-unread.active {
+  display: inline-flex;
+}
+
 .loading-item, .empty-item, .error-item {
   padding: 24px 20px;
   font-size: 13px;
@@ -569,6 +595,10 @@ html, body {
   font-size: 11px;
   color: var(--text-3);
   margin-top: 1px;
+}
+
+.peer-secure.typing {
+  color: #ff8a3d;
 }
 
 .chat-actions {
@@ -812,6 +842,66 @@ html, body {
   gap: 4px;
   margin-top: 3px;
   padding: 0 4px;
+}
+
+.msg-reaction-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 0 2px;
+}
+
+.msg-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.msg-reaction-chip,
+.msg-reaction-empty {
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 11px;
+}
+
+.msg-reaction-chip {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-1);
+}
+
+.msg-reaction-empty {
+  color: var(--text-3);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.msg-reaction-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.msg-reaction-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  font-size: 14px;
+  transition: transform var(--ease), background var(--ease), border-color var(--ease);
+}
+
+.msg-reaction-btn:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.msg-reaction-btn.active {
+  border-color: rgba(255, 122, 24, 0.5);
+  background: rgba(255, 122, 24, 0.14);
 }
 
 .msg-row.out .msg-meta { justify-content: flex-end; }

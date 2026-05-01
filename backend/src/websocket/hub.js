@@ -66,6 +66,18 @@ function initWebSocketHub(httpServer) {
             ...frame.payload,
           },
         });
+        return;
+      }
+
+      if (frame.type === 'TYPING_SIGNAL' && typeof frame.to === 'string') {
+        deliverToUser(frame.to, {
+          type: 'TYPING_SIGNAL',
+          payload: {
+            from: userId,
+            isTyping: Boolean(frame.payload?.isTyping),
+            at: new Date().toISOString(),
+          },
+        });
       }
     });
 
@@ -86,6 +98,10 @@ function deliverToSender(senderId, packet) {
 
 function deliverStatusUpdate(userId, payload) {
   return deliverToUser(userId, { type: 'MESSAGE_STATUS_UPDATE', payload });
+}
+
+function deliverReactionUpdate(userId, payload) {
+  return deliverToUser(userId, { type: 'MESSAGE_REACTION_UPDATE', payload });
 }
 
 function deliverToUser(userId, frame) {
@@ -118,5 +134,6 @@ module.exports = {
   deliverToRecipient,
   deliverToSender,
   deliverStatusUpdate,
+  deliverReactionUpdate,
   deliverToUser,
 };

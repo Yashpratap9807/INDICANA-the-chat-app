@@ -1,5 +1,10 @@
 const mongoose = require('mongoose');
 
+const reactionSchema = new mongoose.Schema({
+  userId: { type: String, required: true },
+  emoji: { type: String, required: true },
+}, { _id: false });
+
 const messageSchema = new mongoose.Schema({
   senderId:   { type: String, required: true, index: true },
   receiverId: { type: String, required: true, index: true },
@@ -13,6 +18,7 @@ const messageSchema = new mongoose.Schema({
   timestamp:  { type: Date, default: Date.now, index: true },
   deliveredAt:{ type: Date, default: null },
   seenAt:     { type: Date, default: null },
+  reactions:  { type: [reactionSchema], default: [] },
 });
 
 messageSchema.index({ senderId: 1, receiverId: 1, timestamp: 1 });

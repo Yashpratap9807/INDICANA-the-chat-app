@@ -141,7 +141,10 @@ const UserListUI = (() => {
             <span class="user-name">${escapeHtml(user.username)}</span>
             <span class="user-preview" id="preview-${user.userId}">${escapeHtml(truncate(preview, 40))}</span>
           </div>
-          <span class="user-time" id="time-${user.userId}">${time}</span>
+          <div class="user-side-meta">
+            <span class="user-time" id="time-${user.userId}">${time}</span>
+            <span class="user-unread${user.unreadCount ? ' active' : ''}" id="unread-${user.userId}">${user.unreadCount ? escapeHtml(String(user.unreadCount)) : ''}</span>
+          </div>
         </li>
       `;
     }).join('');
@@ -153,6 +156,7 @@ const UserListUI = (() => {
 
     selectedUserId = userId;
     highlightUser(userId);
+    clearUnread(userId);
     await ChatUI.open(user);
   }
 
@@ -494,6 +498,32 @@ const UserListUI = (() => {
     }
   }
 
+  function incrementUnread(userId) {
+    const user = usersById.get(userId);
+    if (!user) return;
+
+    user.unreadCount = (user.unreadCount || 0) + 1;
+    usersById.set(userId, user);
+    updateUnreadBadge(userId, user.unreadCount);
+  }
+
+  function clearUnread(userId) {
+    const user = usersById.get(userId);
+    if (!user) return;
+
+    user.unreadCount = 0;
+    usersById.set(userId, user);
+    updateUnreadBadge(userId, 0);
+  }
+
+  function updateUnreadBadge(userId, unreadCount) {
+    const badge = document.getElementById(`unread-${userId}`);
+    if (!badge) return;
+
+    badge.textContent = unreadCount ? String(unreadCount) : '';
+    badge.classList.toggle('active', Boolean(unreadCount));
+  }
+
   function rememberUser(user) {
     const existing = usersById.get(user.userId) || {};
     usersById.set(user.userId, {
@@ -507,6 +537,7 @@ const UserListUI = (() => {
       blockedByUser: user.blockedByUser ?? existing.blockedByUser ?? false,
       followersCount: user.followersCount ?? existing.followersCount ?? 0,
       followingCount: user.followingCount ?? existing.followingCount ?? 0,
+      unreadCount: user.unreadCount ?? existing.unreadCount ?? 0,
     });
   }
 
@@ -648,6 +679,8 @@ const UserListUI = (() => {
     highlightUser,
     clearSelection,
     updatePreview,
+    incrementUnread,
+    clearUnread,
     rememberUser,
     rememberUsers,
     getUserById,

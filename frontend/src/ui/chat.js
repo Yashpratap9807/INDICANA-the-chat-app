@@ -10,6 +10,8 @@ const ChatUI = (() => {
     '😘', '😅', '🥳', '😇', '😡', '🤍', '🌙', '☀️', '🌸', '🎵',
   ];
 
+  const REACTION_EMOJIS = ['\u2764\uFE0F', '\u{1F44D}', '\u{1F602}', '\u{1F525}', '\u{1F62E}'];
+
   const callState = {
     iceServers: null,
     peerConnection: null,
@@ -23,6 +25,10 @@ const ChatUI = (() => {
   };
 
   let cameraStream = null;
+  let localTyping = false;
+  let localTypingTimer = null;
+  let remoteTyping = false;
+  let remoteTypingTimer = null;
 
   async function open(user) {
     if (peer && peer.userId !== user.userId && (callState.peerConnection || callState.localStream || callState.remoteStream)) {
@@ -40,9 +46,12 @@ const ChatUI = (() => {
       }
     }
 
+    stopTyping(true);
+    setRemoteTyping(false);
     peer = { ...user, ...fullProfile };
     UserListUI.rememberUser(peer);
     UserListUI.highlightUser(peer.userId);
+    UserListUI.clearUnread(peer.userId);
 
     const pane = document.getElementById('chat-pane');
     pane.innerHTML = renderPane(peer);
@@ -62,7 +71,7 @@ const ChatUI = (() => {
         </div>
         <div class="peer-info">
           <span class="peer-name">${escapeHtml(activePeer.username)}</span>
-          <span class="peer-secure">${escapeHtml(activePeer.bio || 'No bio yet')}</span>
+          <span class="peer-secure" id="peer-status">${escapeHtml(activePeer.bio || 'No bio yet')}</span>
         </div>
         <div class="chat-actions">
           <button class="action-btn" title="Voice call" onclick="ChatUI.startVoiceCall()">☎</button>
@@ -108,7 +117,7 @@ const ChatUI = (() => {
             rows="1"
             maxlength="4000"
             onkeydown="ChatUI.handleKey(event)"
-            oninput="ChatUI.autoResize(this)"
+            oninput="ChatUI.handleComposerInput(this)"
           ></textarea>
         </div>
         <button type="submit" class="btn-send" id="btn-send" title="Send">
@@ -305,9 +314,7 @@ const ChatUI = (() => {
     }
 
     const secure = document.querySelector('.chat-header .peer-secure');
-    if (secure && peer) {
-      secure.textContent = peer.bio || 'No bio yet';
-    }
+    if (secure && peer) updatePeerStatus();
   }
 
   async function loadHistory() {
@@ -323,6 +330,7 @@ const ChatUI = (() => {
       });
       scrollToBottom();
       API.markConversationSeen(peer.userId).catch(() => {});
+      UserListUI.clearUnread(peer.userId);
     } catch (err) {
       list.innerHTML = `<div class="msg-error">Failed to load: ${escapeHtml(err.message)}</div>`;
     }
@@ -358,6 +366,9 @@ const ChatUI = (() => {
       ${!isMine ? avatarMarkup(peer, 'msg-row-avatar') : ''}
       <div class="msg-bubble">
         <div class="msg-content">${content}</div>
+        <div class="msg-reaction-band">
+          ${reactionBandMarkup(message.nonce, message.reactions)}
+        </div>
         <div class="msg-meta">
           <span class="msg-time">${time}</span>
           ${isMine ? `<span class="msg-seen">${getStatusLabel(message)}</span>` : ''}
@@ -377,6 +388,7 @@ const ChatUI = (() => {
 
     input.value = '';
     autoResize(input);
+    stopTyping(true);
     await sendPayload({ kind: 'text', text }, 'text');
   }
 
@@ -402,6 +414,7 @@ const ChatUI = (() => {
       timestamp: new Date().toISOString(),
       deliveredAt: null,
       seenAt: null,
+      reactions: [],
     };
 
     const list = document.getElementById('messages-list');
@@ -436,6 +449,63 @@ const ChatUI = (() => {
   function autoResize(element) {
     element.style.height = 'auto';
     element.style.height = `${Math.min(element.scrollHeight, 140)}px`;
+  }
+
+  function handleComposerInput(element) {
+    autoResize(element);
+    notifyTyping();
+  }
+
+  function notifyTyping() {
+    if (!peer) return;
+
+    if (!localTyping) {
+      localTyping = true;
+      API.sendTypingSignal(peer.userId, true);
+    }
+
+    clearTimeout(localTypingTimer);
+    localTypingTimer = setTimeout(() => stopTyping(), 1200);
+  }
+
+  function stopTyping(force = false) {
+    clearTimeout(localTypingTimer);
+    localTypingTimer = null;
+
+    if (!peer) {
+      localTyping = false;
+      return;
+    }
+
+    if (localTyping || force) {
+      API.sendTypingSignal(peer.userId, false);
+    }
+
+    localTyping = false;
+  }
+
+  function setRemoteTyping(isTyping) {
+    remoteTyping = Boolean(isTyping);
+    clearTimeout(remoteTypingTimer);
+
+    if (remoteTyping) {
+      remoteTypingTimer = setTimeout(() => {
+        remoteTyping = false;
+        updatePeerStatus();
+      }, 2400);
+    } else {
+      remoteTypingTimer = null;
+    }
+
+    updatePeerStatus();
+  }
+
+  function updatePeerStatus() {
+    const status = document.getElementById('peer-status');
+    if (!status || !peer) return;
+
+    status.textContent = remoteTyping ? 'Typing...' : (peer.bio || 'No bio yet');
+    status.classList.toggle('typing', remoteTyping);
   }
 
   function toggleEmojiPicker() {
@@ -694,6 +764,16 @@ const ChatUI = (() => {
       return;
     }
 
+    if (frame.type === 'MESSAGE_REACTION_UPDATE') {
+      applyReactionUpdate(frame.payload);
+      return;
+    }
+
+    if (frame.type === 'TYPING_SIGNAL') {
+      handleTypingSignal(frame.payload);
+      return;
+    }
+
     if (frame.type === 'CALL_SIGNAL') {
       handleCallSignal(frame.payload);
     }
@@ -706,7 +786,17 @@ const ChatUI = (() => {
     if (!session) return;
 
     if (packet.senderId !== session.userId && packet.senderId !== peer?.userId) {
+      if (!UserListUI.getUserById(packet.senderId)) {
+        API.getPublicKey(packet.senderId)
+          .then((user) => {
+            UserListUI.rememberUser(user);
+            UserListUI.updatePreview(packet.senderId, packet.type === 'image' ? 'Photo' : 'New message', packet.timestamp);
+            UserListUI.incrementUnread(packet.senderId);
+          })
+          .catch(() => {});
+      }
       UserListUI.updatePreview(packet.senderId, packet.type === 'image' ? 'Photo' : 'New message', packet.timestamp);
+      UserListUI.incrementUnread(packet.senderId);
       return;
     }
 
@@ -716,6 +806,9 @@ const ChatUI = (() => {
     );
 
     if (!isRelevant) return;
+    if (packet.senderId === peer.userId) {
+      setRemoteTyping(false);
+    }
     if (packet.senderId === session.userId) {
       const existing = document.querySelector(`.msg-row[data-nonce="${packet.nonce}"]`);
       if (existing) return;
@@ -730,6 +823,25 @@ const ChatUI = (() => {
     appendMessage(packet, session, previousMessage);
     scrollToBottom();
     API.markConversationSeen(peer.userId).catch(() => {});
+    UserListUI.clearUnread(peer.userId);
+  }
+
+  function applyReactionUpdate(payload) {
+    if (!payload) return;
+
+    const row = document.querySelector(`.msg-row[data-nonce="${payload.nonce}"]`)
+      || (payload.clientId ? document.querySelector(`.msg-row[data-client-id="${payload.clientId}"]`) : null);
+    if (!row) return;
+
+    const band = row.querySelector('.msg-reaction-band');
+    if (!band) return;
+
+    band.innerHTML = reactionBandMarkup(payload.nonce, payload.reactions || []);
+  }
+
+  function handleTypingSignal(payload) {
+    if (!payload || !payload.from || !peer || payload.from !== peer.userId) return;
+    setRemoteTyping(payload.isTyping);
   }
 
   async function handleCallSignal(payload) {
@@ -992,6 +1104,53 @@ const ChatUI = (() => {
     return payload.text;
   }
 
+  function reactionBandMarkup(nonce, reactions = []) {
+    return `
+      <div class="msg-reactions">${reactionSummaryMarkup(reactions)}</div>
+      <div class="msg-reaction-picker">
+        ${REACTION_EMOJIS.map((emoji) => `
+          <button
+            type="button"
+            class="msg-reaction-btn${isMyReaction(reactions, emoji) ? ' active' : ''}"
+            onclick="ChatUI.reactToMessage('${escapeAttribute(nonce)}', '${emoji}')"
+            title="React with ${emoji}"
+          >${emoji}</button>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function reactionSummaryMarkup(reactions = []) {
+    if (!reactions.length) {
+      return '<span class="msg-reaction-empty">Tap to react</span>';
+    }
+
+    const grouped = reactions.reduce((acc, reaction) => {
+      acc[reaction.emoji] = (acc[reaction.emoji] || 0) + 1;
+      return acc;
+    }, {});
+
+    return Object.entries(grouped).map(([emoji, count]) => (
+      `<span class="msg-reaction-chip">${emoji} ${count}</span>`
+    )).join('');
+  }
+
+  function isMyReaction(reactions = [], emoji) {
+    const session = Store.get();
+    return reactions.some((reaction) => reaction.userId === session?.userId && reaction.emoji === emoji);
+  }
+
+  async function reactToMessage(nonce, emoji) {
+    if (!peer) return;
+
+    try {
+      const update = await API.reactToMessage(peer.userId, nonce, emoji);
+      applyReactionUpdate(update);
+    } catch (err) {
+      alert(`Reaction failed: ${err.message}`);
+    }
+  }
+
   function updateMessageStatus(payload) {
     if (!payload) return;
 
@@ -1079,6 +1238,7 @@ const ChatUI = (() => {
     if (!input) return;
     input.value = '';
     autoResize(input);
+    stopTyping(true);
   }
 
   function scrollToBottom() {
@@ -1129,8 +1289,10 @@ const ChatUI = (() => {
     sendMessage,
     handleKey,
     autoResize,
+    handleComposerInput,
     toggleEmojiPicker,
     insertEmoji,
+    reactToMessage,
     openAttachmentPicker,
     handleAttachment,
     openGifModal,

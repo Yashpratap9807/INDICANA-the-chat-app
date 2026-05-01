@@ -179,6 +179,14 @@ const API = (() => {
     return request('POST', `/messages/seen/${peerId}`);
   }
 
+  function reactToMessage(peerId, nonce, emoji) {
+    return request('POST', '/messages/react', {
+      peerId,
+      nonce,
+      emoji,
+    });
+  }
+
   async function getRtcConfig() {
     if (!rtcConfigCache) {
       const config = await request('GET', '/rtc/config');
@@ -268,6 +276,22 @@ const API = (() => {
     }));
   }
 
+  function sendTypingSignal(to, isTyping) {
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return false;
+    }
+
+    socket.send(JSON.stringify({
+      type: 'TYPING_SIGNAL',
+      to,
+      payload: {
+        isTyping: Boolean(isTyping),
+      },
+    }));
+
+    return true;
+  }
+
   return {
     register,
     login,
@@ -295,9 +319,11 @@ const API = (() => {
     sendMessage,
     fetchMessages,
     markConversationSeen,
+    reactToMessage,
     getRtcConfig,
     connectWebSocket,
     disconnectWebSocket,
     sendCallSignal,
+    sendTypingSignal,
   };
 })();
